@@ -1,4 +1,4 @@
-from math import sin, cos, tan, sqrt, pi
+from math import sin, cos, tan, sqrt, pi, asin, atan2
 import numpy as np
 
 class KalmanFilter:
@@ -7,12 +7,12 @@ class KalmanFilter:
     e = 0.0818 # eccentricity of WGS-84 ellipsoid
     w_ie = 7.2921e-5 # earth angular velocity 
 
-    def __init__(self, p0, v0, q0): # this could also have stuff for initializing P Q R 
-        self.p = np.matrix(p0).T
-        self.v = np.matrix(v0).T
-        self.q = np.matrix(q0).T
+    def __init__(self, p0, v0, q0):
+        self.pos = np.matrix(p0).T
+        self.vel = np.matrix(v0).T
+        self.quat = np.matrix(q0).T
 
-        e_a, e_g, e_gps_p, e_gps_a, e_gps_v = 5e-5, 5e-5, 1e-6, 1, 25e-4 
+        e_a, e_g, e_gps_p, e_gps_alt, e_gps_v = 5e-5, 5e-5, 1e-6, 1, 25e-4 
 
         self.P = np.matrix([[1e-6, 0, 0, 0, 0, 0, 0, 0, 0], [0, 1e-6, 0, 0, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0, 0, 0, 0], \
                             [0, 0, 0, 25e-4, 0, 0, 0, 0, 0], [0, 0, 0, 0, 25e-4, 0, 0, 0, 0], [0, 0, 0, 0, 0, 25e-4, 0, 0, 0], \
@@ -20,17 +20,24 @@ class KalmanFilter:
         self.Q = np.matrix([[0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0], \
                             [0, 0, 0, e_a, 0, 0, 0, 0, 0], [0, 0, 0, 0, e_a, 0, 0, 0, 0], [0, 0, 0, 0, 0, e_a, 0, 0, 0], \
                             [0, 0, 0, 0, 0, 0, e_g, 0, 0], [0, 0, 0, 0, 0, 0, 0, e_g, 0], [0, 0, 0, 0, 0, 0, 0, 0, e_g]]) 
-        self.R = np.matrix([[e_gps_p, 0, 0, 0, 0, 0], [0, e_gps_p, 0, 0, 0, 0], [0, 0, e_gps_a, 0, 0, 0], \
+        self.R = np.matrix([[e_gps_p, 0, 0, 0, 0, 0], [0, e_gps_p, 0, 0, 0, 0], [0, 0, e_gps_alt, 0, 0, 0], \
                             [0, 0, 0, e_gps_v, 0, 0], [0, 0, 0, 0, e_gps_v, 0], [0, 0, 0, 0, 0, e_gps_v]])
         self.H = np.matrix([[180 / pi, 0, 0, 0, 0, 0, 0, 0, 0], [0, 180 / pi, 0, 0, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0, 0, 0, 0], \
                             [0, 0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0, 0, 0]])
+        self.BNO_tilt_error = [8e-3, 8e-3, 8e-3]
 
     def predict(self, f_p, gyro_ip, T_s):
-
-        b1 = self.q.item(0)
-        b2 = self.q.item(1)
-        b3 = self.q.item(2)
-        b4 = self.q.item(3)
+        '''
+        Args:
+            f_p: list of accelerometer readings 
+            gyro_ip: list of gyroscope readings 
+            T_s: time elapsed since last readings 
+        '''
+        # get rotation matrices from attitude quaternion 
+        b1 = self.quat.item(0)
+        b2 = self.quat.item(1)
+        b3 = self.quat.item(2)
+        b4 = self.quat.item(3)
 
         p1 = b1 ** 2
         p2 = b2 ** 2
@@ -65,18 +72,18 @@ class KalmanFilter:
 
         R_n2p = R_p2n.I
 
-
-        lat = self.p.item(0)
-        h = self.p.item(2)
+        # fill state transition jacobian 
+        lat = self.pos.item(0)
+        h = self.pos.item(2)
         R_meridian = self.a * (1 - self.e ** 2) / (1 - self.e ** 2 * (sin(lat)) ** 2) ** 1.5 + h 
         R_transverse = self.a / (1 - self.e ** 2 * (sin(lat) ** 2)) ** 0.5 + h 
         R_e = sqrt(R_meridian * R_transverse) # assume that R_meridian ~ R_transverse ~ R_e 
 
         f_n = R_p2n * np.matrix(f_p).T 
 
-        v_N = self.v.item(0)
-        v_E = self.v.item(1)
-        v_D = self.v.item(2)
+        v_N = self.vel.item(0)
+        v_E = self.vel.item(1)
+        v_D = self.vel.item(2)
         f_N = f_n.item(0)
         f_E = f_n.item(1)
         f_D = f_n.item(2)
@@ -103,45 +110,91 @@ class KalmanFilter:
                        [-2 * v_E * omega_D, 0, F_63, 2 * rho_E, -2 * w_N, 0, f_E, f_N, 0], [-omega_D, 0, rho_N / R_e, 0, -1 / R_e, 0, 0, w_D, -w_E], \
                        [0, 0, rho_E / R_e, 1 / R_e, 0, 0, -w_D, 0, w_N], [omega_N + rho_N / cos(lat) ** 2, 0, rho_D / R_e, 0, tan(lat) / R_e, 0, w_E, -w_N, 0]])
 
-        p_dot = np.matrix([[1 / R_meridian, 0, 0], [0, 1 / (R_transverse * cos(lat)), 0], [0, 0, -1]]) * self.v
-
+        # update states 
+        p_dot = np.matrix([[1 / R_meridian, 0, 0], [0, 1 / (R_transverse * cos(lat)), 0], [0, 0, -1]]) * self.vel
         lat_dot = p_dot.item(0)
         long_dot = p_dot.item(1)
-
-        gyro = np.matrix(gyro_ip).T - R_n2p * np.matrix([(long_dot + self.w_ie) * cos(lat), -lat_dot, -(long_dot + self.w_ie) * sin(lat)]).T
         g = np.matrix([0, 0, 9.8]).T # add centripetal term to this 
-
         v_dot = f_n + g + np.matrix([[0, -(long_dot + 2 * self.w_ie) * sin(lat), lat_dot], [(long_dot + 2 * self.w_ie) * sin(lat), 0, (long_dot + 2 * self.w_ie) * cos(lat)], \
-                                     [-lat_dot, -(long_dot + 2 * self.w_ie) * cos(lat), 0]]) * self.v
-
+                                     [-lat_dot, -(long_dot + 2 * self.w_ie) * cos(lat), 0]]) * self.vel
+        
+        gyro = np.matrix(gyro_ip).T - R_n2p * np.matrix([(long_dot + self.w_ie) * cos(lat), -lat_dot, -(long_dot + self.w_ie) * sin(lat)]).T
         p = gyro.item(0)
         q = gyro.item(1)
         r = gyro.item(2)
-
         norm = sqrt(p ** 2 + q ** 2 + r ** 2)
         omega = np.matrix([[0, r, -q, p], [-r, 0, p, q], [q, -p, 0, r], [-p, -q, -r, 0]]) # where quaternion is [vector part, scalar part]
 
-        self.p = self.p + T_s * p_dot # add second order term 
-        self.v = self.v + T_s * v_dot
-        self.q = (cos(0.5 * T_s * norm) * np.identity(4) + 1 / norm * sin(0.5 * T_s * norm) * omega) * self.q
+        self.pos = self.pos + T_s * p_dot # add second order term 
+        self.vel = self.vel + T_s * v_dot
+        self.quat = (cos(0.5 * T_s * norm) * np.identity(4) + 1 / norm * sin(0.5 * T_s * norm) * omega) * self.quat
 
         self.P = (np.identity(9) + T_s * F) * self.P * (np.identity(9) + T_s * F).T + T_s * self.Q
 
-    def update(self, gps): # gps is list including position and velocity from gps (can also add BNO055 attitude estimation to combine with my prediction)
-        y = np.matrix(gps).T - self.H * np.matrix(self.p.tolist() + self.v.tolist() + [[0], [0], [0]]) # change out [0, 0, 0] for euler angles (converted from self.q)
+    def update(self, gps, att): 
+        '''
+        Args:
+            gps: list of position and velocity from gps 
+            att: list of roll pitch yaw (in rad) from BNO
+        '''
+        y = np.matrix(gps).T - self.H * np.matrix(self.pos.tolist() + self.vel.tolist() + [[0], [0], [0]])
         K = self.P * self.H.T * (self.H * self.P * self.H.T + self.R).I
-        modList = (K * y).tolist()
-        self.p = self.p + np.matrix(modList[:3])
-        self.v = self.v + np.matrix(modList[3:6])
-        #self.q = self.q + np.matrix(modList[6:9]) change this to rotate self.q by tilt error 
+        mod_list = (K * y).tolist()
+        self.pos = self.pos + np.matrix(mod_list[:3])
+        self.vel = self.vel + np.matrix(mod_list[3:6]) 
         self.P = (np.identity(9) - K * self.H) * self.P
+
+        # attitude correction (assume small angle correction)
+        ypr = quat_to_ypr(self.getq())
+        roll_error = min(att[2] - ypr[2], 2 * pi + att[2] - ypr[2], att[2] - (2 * pi + ypr[2]), key=abs)
+        pitch_error = att[1] - ypr[1]
+        yaw_error = min(att[0] - ypr[0], 2 * pi + att[0] - ypr[0], att[0] - (2 * pi + ypr[0]), key=abs)
+        tilt_error = (np.matrix([[1, 0, -sin(ypr[1])], [0, cos(ypr[2]), cos(ypr[1]) * sin(ypr[2])], [0, -sin(ypr[1]), cos(ypr[1]) * cos(ypr[2])]]) * \
+                      np.matrix([roll_error, pitch_error, yaw_error]).T).tolist()
+        # scale each angle in tilt_error
+        temp_P = self.P.tolist()
+        P_tilt_error = [temp_P[6][6], temp_P[7][7], temp_P[8][8]]
+        tilt_error = [tilt_error[0][0] * P_tilt_error[0] / (P_tilt_error[0] + self.BNO_tilt_error[0]), \
+                      tilt_error[1][0] * P_tilt_error[1] / (P_tilt_error[1] + self.BNO_tilt_error[1]), \
+                      tilt_error[2][0] * P_tilt_error[2] / (P_tilt_error[2] + self.BNO_tilt_error[2])]
+        if sqrt(tilt_error[0] ** 2 + tilt_error[1] ** 2 + tilt_error[2] ** 2) < 1e-3:
+            return
+        # update attitude 
+        mod = np.matrix([[0, tilt_error[2], -tilt_error[1], tilt_error[0]], [-tilt_error[2], 0, tilt_error[0], tilt_error[1]], \
+                           [tilt_error[1], -tilt_error[0], 0, tilt_error[2]], [-tilt_error[0], -tilt_error[1], -tilt_error[2], 0]])
+        self.quat = self.quat + 0.5 * mod * self.quat
+        # normalize 
+        self.quat /= np.linalg.norm(self.quat)
+
+        new_tilt_error = []
+        for i in range(3):
+            if P_tilt_error[i] <= self.BNO_tilt_error[i]:
+                new_tilt_error.append(P_tilt_error[i])
+            else:
+                new_tilt_error.append(self.BNO_tilt_error[i])
+        # update P (zones A & C)
+        for i in range(6):
+            for j in range(6, 9):
+                temp_P[i][j] *= sqrt(new_tilt_error[j - 6] / P_tilt_error[j - 6])
+                temp_P[j][i] = temp_P[i][j]
+        # update P (zone B)
+        for i in range (6, 9):
+            for j in range(6, 9):
+                temp_P[i][j] *= sqrt(new_tilt_error[i - 6] / P_tilt_error[i - 6]) * sqrt(new_tilt_error[j - 6] / P_tilt_error[j - 6])
+        self.P = np.matrix(temp_P)
     
     def getp(self):
-        return list(map(lambda a: a[0], self.p.tolist()))
+        return list(map(lambda a: a[0], self.pos.tolist()))
 
     def getv(self):
-        return list(map(lambda a: a[0], self.v.tolist()))
+        return list(map(lambda a: a[0], self.vel.tolist()))
     
     def getq(self):
-        return list(map(lambda a: a[0], self.q.tolist()))
+        return list(map(lambda a: a[0], self.quat.tolist()))
+    
+def quat_to_ypr(q):
+    yaw   = atan2(2.0 * (q[0] * q[1] + q[3] * q[2]), q[3] * q[3] + q[0] * q[0] - q[1] * q[1] - q[2] * q[2])
+    pitch = -asin(2.0 * (q[0] * q[2] - q[3] * q[1]))
+    roll  = atan2(2.0 * (q[3] * q[0] + q[1] * q[2]), q[3] * q[3] - q[0] * q[0] - q[1] * q[1] + q[2] * q[2])
+    return [yaw, pitch, roll]
 

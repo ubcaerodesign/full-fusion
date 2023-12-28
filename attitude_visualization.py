@@ -39,8 +39,7 @@ class Display:
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
-
-    def draw(self, w, nx, ny, nz, alt):
+    def draw(self, nx, ny, nz, w, alt):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         glTranslatef(0, 0.0, -7.0)
@@ -50,7 +49,7 @@ class Display:
         self.drawText((-2.6, -2, 2), "Altitude: %f" %alt, 16)
 
         if(self.useQuat):
-            [yaw, pitch , roll] = self.quat_to_ypr([w, nx, ny, nz])
+            [yaw, pitch, roll] = self.quat_to_ypr([nx, ny, nz, w])
             self.drawText((-2.6, -1.8, 2), "Yaw: %f, Pitch: %f, Roll: %f" %(yaw, pitch, roll), 16)
             glRotatef(2 * math.acos(w) * 180.00/math.pi, -1 * nx, nz, ny)
         else:
@@ -102,7 +101,6 @@ class Display:
 
         pygame.display.flip()
 
-
     def drawText(self, position, textString, size):
         font = pygame.font.SysFont("Courier", size, True)
         textSurface = font.render(textString, True, (255, 255, 255, 255), (0, 0, 0, 255))
@@ -110,13 +108,13 @@ class Display:
         glRasterPos3d(*position)
         glDrawPixels(textSurface.get_width(), textSurface.get_height(), GL_RGBA, GL_UNSIGNED_BYTE, textData)
 
-    def quat_to_ypr(self, q):
-        yaw   = math.atan2(2.0 * (q[1] * q[2] + q[0] * q[3]), q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3])
-        pitch = -math.asin(2.0 * (q[1] * q[3] - q[0] * q[2]))
-        roll  = math.atan2(2.0 * (q[0] * q[1] + q[2] * q[3]), q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3])
-        pitch *= 180.0 / math.pi
+    def quat_to_ypr(self, q): 
+        yaw   = math.atan2(2.0 * (q[0] * q[1] + q[3] * q[2]), q[3] * q[3] + q[0] * q[0] - q[1] * q[1] - q[2] * q[2])
+        pitch = -math.asin(2.0 * (q[0] * q[2] - q[3] * q[1]))
+        roll  = math.atan2(2.0 * (q[3] * q[0] + q[1] * q[2]), q[3] * q[3] - q[0] * q[0] - q[1] * q[1] + q[2] * q[2])
         yaw   *= 180.0 / math.pi
-        yaw   -= -0.10 # declination 
+        #yaw   -= -0.10 # declination 
+        pitch *= 180.0 / math.pi
         roll  *= 180.0 / math.pi
         return [yaw, pitch, roll]
 

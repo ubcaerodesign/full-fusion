@@ -13,7 +13,7 @@ import webbrowser
 
 reader = serial_read.Read("test_data\\imu_gps.csv")
 indices = {}
-rad_or_deg = {"filter": "rad", "filter_update": "deg", "map": "deg", "graph": "deg"} # do not change filter or map units  
+rad_or_deg = {"filter": "rad", "gps_update": "deg", "att_update": "rad", "map": "deg", "graph": "deg"} # do not change filter or map units  
 
 def convert_angle(input_type, output_type):
     if rad_or_deg[input_type] == "rad" and rad_or_deg[output_type] == "rad":
@@ -60,7 +60,7 @@ while True:
     time.append(firstLine[indices["time"]])
     q = kf.getq()
     p = kf.getp()
-    drawer.draw(q[3], q[0], q[1], q[2], p[2])
+    drawer.draw(q[0], q[1], q[2], q[3], p[2])
     algo_points.append((convert_angle("filter", "map") * p[0], convert_angle("filter", "map") * p[1]))
     ref_points.append((convert_angle("ref_pos_lat", "map") * firstLine[indices["ref_pos_lat"]], convert_angle("ref_pos_lon", "map") * firstLine[indices["ref_pos_lon"]]))
     v = kf.getv()
@@ -77,9 +77,11 @@ while True:
                 convert_angle("gyro_z", "filter") * firstLine[indices["gyro_z"]]], T_s)
 
     if i % 10 == 0: # change based on ratio of gps sample rate to imu sample rate
-        kf.update([convert_angle("gps_lat", "filter_update") * nextLine[indices["gps_lat"]], \
-                   convert_angle("gps_lon", "filter_update") * nextLine[indices["gps_lon"]], nextLine[indices["gps_alt"]], \
-                   nextLine[indices["gps_vN"]], nextLine[indices["gps_vE"]], nextLine[indices["gps_vD"]]]) 
+        kf.update([convert_angle("gps_lat", "gps_update") * nextLine[indices["gps_lat"]], \
+                   convert_angle("gps_lon", "gps_update") * nextLine[indices["gps_lon"]], nextLine[indices["gps_alt"]], \
+                   nextLine[indices["gps_vN"]], nextLine[indices["gps_vE"]], nextLine[indices["gps_vD"]]], \
+                  [convert_angle("ref_Yaw", "att_update") * nextLine[indices["ref_Yaw"]], convert_angle("ref_Pitch", "att_update") * nextLine[indices["ref_Pitch"]], \
+                   convert_angle("ref_Roll", "att_update") * nextLine[indices["ref_Roll"]]]) 
 
     firstLine = nextLine 
     i += 1
