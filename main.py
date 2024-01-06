@@ -13,7 +13,7 @@ import webbrowser
 
 reader = serial_read.Read("test_data\\imu_gps.csv")
 indices = {}
-rad_or_deg = {"filter": "rad", "gps_update": "deg", "att_update": "rad", "map": "deg", "graph": "deg"} # do not change filter or map units  
+rad_or_deg = {"filter": "rad", "gps_update": "deg", "map": "deg", "graph": "deg"} # do not change filter or map units
 
 def convert_angle(input_type, output_type):
     if rad_or_deg[input_type] == "rad" and rad_or_deg[output_type] == "rad":
@@ -80,8 +80,7 @@ while True:
         kf.update([convert_angle("gps_lat", "gps_update") * nextLine[indices["gps_lat"]], \
                    convert_angle("gps_lon", "gps_update") * nextLine[indices["gps_lon"]], nextLine[indices["gps_alt"]], \
                    nextLine[indices["gps_vN"]], nextLine[indices["gps_vE"]], nextLine[indices["gps_vD"]]], \
-                  [convert_angle("ref_Yaw", "att_update") * nextLine[indices["ref_Yaw"]], convert_angle("ref_Pitch", "att_update") * nextLine[indices["ref_Pitch"]], \
-                   convert_angle("ref_Roll", "att_update") * nextLine[indices["ref_Roll"]]]) 
+                  [nextLine[indices["q1"]], nextLine[indices["q2"]], nextLine[indices["q3"]], nextLine[indices["q0"]]]) 
 
     firstLine = nextLine 
     i += 1

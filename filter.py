@@ -1,4 +1,4 @@
-from math import sin, cos, tan, sqrt, pi, asin, atan2
+from math import sin, cos, tan, sqrt, pi, asin, acos, atan2
 import numpy as np
 
 class KalmanFilter:
@@ -135,7 +135,7 @@ class KalmanFilter:
         '''
         Args:
             gps: list of position and velocity from gps 
-            att: list of roll pitch yaw (in rad) from BNO
+            att: list of quaternions from BNO [vector part, scalar part]
         '''
         y = np.matrix(gps).T - self.H * np.matrix(self.pos.tolist() + self.vel.tolist() + [[0], [0], [0]])
         K = self.P * self.H.T * (self.H * self.P * self.H.T + self.R).I
@@ -144,27 +144,32 @@ class KalmanFilter:
         self.vel = self.vel + np.matrix(mod_list[3:6]) 
         self.P = (np.identity(9) - K * self.H) * self.P
 
-        # attitude correction (assume small angle correction)
-        ypr = quat_to_ypr(self.getq())
-        roll_error = min(att[2] - ypr[2], 2 * pi + att[2] - ypr[2], att[2] - (2 * pi + ypr[2]), key=abs)
-        pitch_error = att[1] - ypr[1]
-        yaw_error = min(att[0] - ypr[0], 2 * pi + att[0] - ypr[0], att[0] - (2 * pi + ypr[0]), key=abs)
-        tilt_error = (np.matrix([[1, 0, -sin(ypr[1])], [0, cos(ypr[2]), cos(ypr[1]) * sin(ypr[2])], [0, -sin(ypr[1]), cos(ypr[1]) * cos(ypr[2])]]) * \
-                      np.matrix([roll_error, pitch_error, yaw_error]).T).tolist()
+        # attitude correction 
+        print(list(map(lambda a: 180 / pi * a, quat_to_ypr(self.getq()))))
+        print(list(map(lambda a: 180 / pi * a, quat_to_ypr(att))))
+        q = self.getq()
+        q1, q2, q3, q4 = q[0], q[1], q[2], q[3]
+        Q_conj = np.matrix([[q4, q3, -q2, q1], [-q3, q4, q1, q2], [q2, -q1, q4, q3], [-q1, -q2, -q3, q4]])
+        q_mod = vector_to_list(Q_conj.I * np.matrix(att).T)
+        mag = 2 * acos(q_mod[3])
+        q_mod_prime = vector_to_list(Q_conj.I * -np.matrix(att).T)
+        mag_prime = 2 * acos(q_mod_prime[3])
+        if mag > mag_prime:
+            q_mod = q_mod_prime
+            mag = mag_prime
+        if mag < 1e-3:
+            return
+        tilt_error = list(map(lambda a: mag * a / sin(mag / 2), q_mod[:3]))
         # scale each angle in tilt_error
         temp_P = self.P.tolist()
         P_tilt_error = [temp_P[6][6], temp_P[7][7], temp_P[8][8]]
-        tilt_error = [tilt_error[0][0] * P_tilt_error[0] / (P_tilt_error[0] + self.BNO_tilt_error[0]), \
-                      tilt_error[1][0] * P_tilt_error[1] / (P_tilt_error[1] + self.BNO_tilt_error[1]), \
-                      tilt_error[2][0] * P_tilt_error[2] / (P_tilt_error[2] + self.BNO_tilt_error[2])]
-        if sqrt(tilt_error[0] ** 2 + tilt_error[1] ** 2 + tilt_error[2] ** 2) < 1e-3:
-            return
-        # update attitude 
-        mod = np.matrix([[0, tilt_error[2], -tilt_error[1], tilt_error[0]], [-tilt_error[2], 0, tilt_error[0], tilt_error[1]], \
-                           [tilt_error[1], -tilt_error[0], 0, tilt_error[2]], [-tilt_error[0], -tilt_error[1], -tilt_error[2], 0]])
-        self.quat = self.quat + 0.5 * mod * self.quat
-        # normalize 
-        self.quat /= np.linalg.norm(self.quat)
+        tilt_error = [tilt_error[0] * P_tilt_error[0] / (P_tilt_error[0] + self.BNO_tilt_error[0]), \
+                      tilt_error[1] * P_tilt_error[1] / (P_tilt_error[1] + self.BNO_tilt_error[1]), \
+                      tilt_error[2] * P_tilt_error[2] / (P_tilt_error[2] + self.BNO_tilt_error[2])]
+        # update attitude
+        mag = sqrt(tilt_error[0] ** 2 + tilt_error[1] ** 2 + tilt_error[2] ** 2)
+        q_mod = np.matrix(list(map(lambda a: sin(mag / 2) * a / mag, tilt_error)) + [cos(mag / 2)]).T
+        self.quat = Q_conj * q_mod
 
         new_tilt_error = []
         for i in range(3):
@@ -191,6 +196,9 @@ class KalmanFilter:
     
     def getq(self):
         return list(map(lambda a: a[0], self.quat.tolist()))
+
+def vector_to_list(v):
+    return list(map(lambda a: a[0], v.tolist()))
     
 def quat_to_ypr(q):
     yaw   = atan2(2.0 * (q[0] * q[1] + q[3] * q[2]), q[3] * q[3] + q[0] * q[0] - q[1] * q[1] - q[2] * q[2])
