@@ -1,6 +1,6 @@
 import attitude_visualization
 import serial_read
-import filter
+import plane.peripherals.filter as filter
 from math import pi
 
 from data_plotter import plot_in_one_figure
@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 import folium
 import webbrowser
 
-# use the same data stamps 
-# assuming that each data line is sent with the same items (we "reuse" gps data) 
+# use the same data stamps
+# assuming that each data line is sent with the same items (we "reuse" gps data)
 
 reader = serial_read.Read("test_data\\imu_gps.csv")
 indices = {}
@@ -22,7 +22,7 @@ def convert_angle(input_type, output_type):
         return 180 / pi
     elif rad_or_deg[input_type] == "deg" and rad_or_deg[output_type] == "rad":
         return pi / 180
-    else: 
+    else:
         return 1
 
 headers = reader.getData()
@@ -38,7 +38,7 @@ for head in headers:
             rad_or_deg[name] = "deg"
     except:
         pass
-    i += 1 
+    i += 1
 
 firstLine = list(map(float, reader.getData())) # list of data (string parsed and split in reader)
 
@@ -55,7 +55,7 @@ algo_points = []
 ref_points = []
 
 i = 1
-while True: 
+while True:
     print(firstLine[indices["time"]])
     time.append(firstLine[indices["time"]])
     q = kf.getq()
@@ -80,9 +80,9 @@ while True:
         kf.update([convert_angle("gps_lat", "gps_update") * nextLine[indices["gps_lat"]], \
                    convert_angle("gps_lon", "gps_update") * nextLine[indices["gps_lon"]], nextLine[indices["gps_alt"]], \
                    nextLine[indices["gps_vN"]], nextLine[indices["gps_vE"]], nextLine[indices["gps_vD"]]], \
-                  [nextLine[indices["q1"]], nextLine[indices["q2"]], nextLine[indices["q3"]], nextLine[indices["q0"]]]) 
+                  [nextLine[indices["q1"]], nextLine[indices["q2"]], nextLine[indices["q3"]], nextLine[indices["q0"]]])
 
-    firstLine = nextLine 
+    firstLine = nextLine
     i += 1
 
 

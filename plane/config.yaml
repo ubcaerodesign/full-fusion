@@ -1,0 +1,56 @@
+# Config file for config stuff
+plane:
+  start_state       : collect # idle, collect
+  pub_port          : 5555
+  sub_port          : 5556
+  remote_server_ip  : 144.126.213.3
+
+camera:
+  use_camera        : False
+  show_images       : False
+  display_size      : [1920, 1080]
+  camera_source     : 0
+  video_file        : fake_data/flyover.mp4
+
+sensors:
+  port              : /dev/ttyAMA0 # raspi uart
+  use_fake_data     : False
+
+radio:
+  port              : /dev/ttyUSB0
+  
+servo:
+  servo_pin         : 69
+
+logging:
+  level             : INFO # NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL
+  directory         : logging/
+
+# ZMQ data packet specs
+# All data structures also contain a type and timestamp field
+sensor_data_structure:
+  type      : "imu"
+  accel_x   : None
+  accel_y   : None
+  accel_z   : None
+  gyro_x    : None
+  gyro_y    : None
+  gyro_z    : None
+  mx        : None
+  my        : None
+  mz        : None
+  gps_lat   : None
+  gps_lon   : None
+  gps_alt   : None
+  gps_bear  : None
+  timestamp : None # time since epoch in ms
+
+img_data_structure:
+  type      : "img"
+  image     : None
+  timestamp : None # time since epoch in ms
+
+state_data_structure:
+  type      : "state"
+  state     : None
+  timestamp : None # time since epoch in ms
