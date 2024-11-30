@@ -42,7 +42,7 @@ class KalmanFilter:
 
     def filter_data(self, data):
         nextLine = data
-        T_s = 1e3 * (nextLine["time"] - self.firstLine["time"])
+        T_s = 1e-3 * (nextLine["time"] - self.firstLine["time"]) # convert from ms to s
         self.predict([self.firstLine["accel_x"], self.firstLine["accel_y"], self.firstLine["accel_z"]], \
                      [self.firstLine["gyro_x"], self.firstLine["gyro_y"], self.firstLine["gyro_z"]], T_s)
         if round(nextLine["gps_vN"], 5) != round(self.firstLine["gps_vN"], 5): # check for new gps data
